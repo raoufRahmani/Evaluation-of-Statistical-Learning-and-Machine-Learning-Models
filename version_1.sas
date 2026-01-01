@@ -109,7 +109,42 @@ proc iml;
       return(beta);
    finish ForwardStagewise;
 
+/* --- Génération des vecteurs Y pour chaque cas --- */
+   Y_H0    = DGP_H0(X);
+   Y_H1    = DGP_H1(X);
+   Y_rupt  = DGP_ruptures(X);
+   Mat_col = DGP_colinearite(n, p); /* Renvoie X et Y déjà concaténés */
+   Y_out   = DGP_outliers(X);
 
+   /* 1. Création de DATA_H0 */
+   Z_H0 = X || Y_H0;
+   create DATA_H0 from Z_H0[colname={"X1" "X2" "X3" "X4" "X5" "Y"}];
+   append from Z_H0;
+   close DATA_H0;
+
+   /* 2. Création de DATA_H1 */
+   Z_H1 = X || Y_H1;
+   create DATA_H1 from Z_H1[colname={"X1" "X2" "X3" "X4" "X5" "Y"}];
+   append from Z_H1;
+   close DATA_H1;
+
+   /* 3. Création de DATA_rupt */
+   Z_rupt = X || Y_rupt;
+   create DATA_rupt from Z_rupt[colname={"X1" "X2" "X3" "X4" "X5" "Y"}];
+   append from Z_rupt;
+   close DATA_rupt;
+
+   /* 4. Création de DATA_colin */
+   /* Note: Ici on utilise directement Mat_col car votre fonction fait déjà la fusion */
+   create DATA_colin from Mat_col[colname={"X1" "X2" "X3" "X4" "X5" "Y"}];
+   append from Mat_col;
+   close DATA_colin;
+
+   /* 5. Création de DATA_out */
+   Z_out = X || Y_out;
+   create DATA_out from Z_out[colname={"X1" "X2" "X3" "X4" "X5" "Y"}];
+   append from Z_out;
+   close DATA_out;
    /*LARS*/
    /*ajoute a petits pas jusqu'a avant une variable ne devienne plus importante que la premiere*/
    start LARS(dataName, critere_arret); /*on peut mettre dans critere d'arret soit AIC, BIC, CV (pour validation croisée)*/
@@ -239,7 +274,7 @@ proc iml;
    endsubmit;
 
    /*Tester Forward Stagewise sur Y_H1, Y_H0, Y_rupt   epsStep = 0.001;
-   Titer = 5000;
+   Titer = 5000;*/
 
    /* Sur Y_H1 */
    beta_FS_H1 = ForwardStagewise(X, Y_H1, epsStep, Titer);
@@ -270,4 +305,16 @@ proc iml;
    run LassoCV("Data_H1", "random(5)");
    run ElasticNet("Data_H1", "AIC");
 
+   /*Faire des tests */
+
+   /* données avec ruptures*/
+   print "ANALYSE SUR DATA_RUPT ";
+   run LassoCV("DATA_rupt", "random(5)");
+   run Stepwise("DATA_rupt", "stepwise", "SBC");
+
+   /* sur les données avec colinéarité */
+   /* C'est ici que l'Elastic Net devrait être le plus performant */
+   print "ANALYSE SUR DATA_COLIN";
+   run ElasticNet("DATA_colin", "AIC");
+   run LassoCV("DATA_colin", "random(5)");
 quit;
