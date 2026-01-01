@@ -15,9 +15,7 @@ proc iml;
    /* Bruit de base (eps global utilisable) */
    eps_global = normal(j(n,1,0)) * 0.1;
 
-   /* ==========================
-      CAS H0 : indépendance
-      ========================== */
+   /*CAS H0 : indépendance*/
    start DGP_H0(X);
       n = nrow(X);
       p = ncol(X);
@@ -120,10 +118,13 @@ proc iml;
    /* ==========================
       LARS, Lasso, LassoCV, Stepwise, ElasticNet (proc glmselect)
       ========================== */
-   start LARS(dataName, stopCriterion);
+
+   /*LARS*/
+   /*ajoute a petits pas jusqu'a avant une variable ne devienne plus importante que la premiere*/
+   start LARS(dataName, crtitere_arret); /*on peut mettre dans critere d'arret soit AIC, BIC, CV (pour validation croisée)*/
       submit dataName stopCriterion;
          proc glmselect data=&dataName;
-            model Y = X1-X5 / selection=lars(stop=&stopCriterion);
+            model Y = X1-X5 / selection=lars(stop=&criterearret);
             output out=LarsOut p=predicted;
          run;
       endsubmit;
@@ -137,10 +138,18 @@ proc iml;
       print "--- Résultats LARS ---", "Critère d'arrêt:" stopCriterion, "MSE:" mse;
    finish LARS;
 
-   start Lasso(dataName, lambdaValue, stopCriterion);
-      submit dataName lambdaValue stopCriterion;
+/*LARS ne fait que ajouter des vars, alots que lasso peut eliminier des vars*/
+
+/*Lasso*/ 
+ /*Lasso avec Lambda fixe */
+
+      /*Lasso par minimiser l'erruer(logvraisemblance + norme L1 de nombre de coeffs), le lasso cherche a equilibrer entre l'erreur et
+   la taille du modele*/
+
+   start Lasso(dataName, lambdaValue);
+      submit dataName lambdaValue;
          proc glmselect data=&dataName;
-            model Y = X1-X5 / selection=lasso(stop=&stopCriterion  lambda=&lambdaValue) stats=all;
+            model Y = X1-X5 / selection=lasso(steps=120 lambda=&lambdaValue) stats=all;
             output out=LassoOut p=predicted;
          run;
       endsubmit;
@@ -152,33 +161,39 @@ proc iml;
       n = nrow(Y);
       residus = Y - predicted;
       mse = (residus`*residus)/n;
-      print "--- Résultats Lasso ---", "Lambda:" lambdaValue, "Stop:" stopCriterion, "MSE:" mse;
+      print "--- Résultats Lasso Fixe ---", "Lambda:" lambdaValue, "MSE:" mse;
    finish Lasso;
 
-
+   /*Lasso avec validation croisée car on peut pas le mettre dans une fonction ou on donne la valeur de lambda */
    start LassoCV(dataName, cvType);
       submit dataName cvType;
          proc glmselect data=&dataName;
-            partition fraction(validate=0.3);
+            partition fraction(validate=0.3); /* Sépare les données */
             model Y = X1-X5 / selection=lasso(stop=cv) cvmethod=&cvType;
-            output out=LassoCVOut p=predicted;
+            output out=LassoCVOut p=predicted copyvar=_ROLE_; /* _ROLE_ permet de savoir qui est test/train */
          run;
       endsubmit;
 
       use LassoCVOut;
-      read all var {Y predicted};
+      /* On ne calcule le MSE que sur les données de validation (le groupe de test) */
+      read all var {Y predicted} where(_ROLE_='VALIDATE'); 
       close LassoCVOut;
 
       n = nrow(Y);
       residus = Y - predicted;
       mse = (residus`*residus)/n;
-      print "--- LASSO CV ---", "CV type:" cvType, "MSE:" mse;
+      print "--- LASSO CV (Validation uniquement) ---", "CV type:" cvType, "MSE:" mse;
    finish LassoCV;
 
-   start Stepwise(dataName, selectionMethod, stopCriterion, selectCriterion);
-      submit dataName selectionMethod stopCriterion selectCriterion;
+
+
+   /*Stepwise : Selecton forward et backward*/
+
+
+   start Stepwise(dataName, selectionMethod, stopCriterion);
+      submit dataName selectionMethod stopCriterion;
          proc glmselect data=&dataName;
-            model Y = X1-X5 / selection=&selectionMethod(select=&selectCriterion stop=&stopCriterion) stats=all;
+            model Y = X1-X5 / selection=&selectionMethod(stop=&stopCriterion) stats=all;
             output out=StepOut p=predicted;
          run;
       endsubmit;
@@ -190,8 +205,11 @@ proc iml;
       n = nrow(Y);
       residus = Y - predicted;
       mse = (residus`*residus)/n;
-      print "--- Stepwise ---", "Méthode:" selectionMethod, "Critère sélection:" selectCriterion, "Stop:" stopCriterion, "MSE:" mse;
+      print "--- Stepwise ---", "Méthode:" selectionMethod, "Stop:" stopCriterion, "MSE:" mse;
    finish Stepwise;
+
+   /*Elastic Net*/
+/*mélange les deux techniques que nous avons vues : le Lasso et la Ridge.*/
 
    start ElasticNet(dataName, alphaValue, lambdaValue, stopCriterion);
       submit dataName alphaValue lambdaValue stopCriterion;
@@ -262,12 +280,12 @@ proc iml;
 
 
    /*Appel des autres méthodes*/
-   call LARS("Data_H1", "SL");
-   call Lasso("Data_H1", 0.1, "SL");
-   call Stepwise("Data_H1", "forward", "SL", "SL");
-   call Stepwise("Data_H1", "backward", "AIC", "AIC");
+   call LARS("Data_H1", "AIC");
+   call Lasso("Data_H1", 0.1, "AIC");
+   call Stepwise("Data_H1", "forward", "SL");
+   call Stepwise("Data_H1", "backward", "AIC");
    call LassoCV("Data_H1", "random(5)");
-   call ElasticNet("Data_H1", 0.5, 0.1, "SL");
+   call ElasticNet("Data_H1", 0.5, 0.1, "AIC");
 
 
 
