@@ -1,0 +1,7 @@
+{
+  "bundle": "t001_bias_variance_tradeoff",
+  "source_file": "Bias_variance_tradeoff.sas",
+  "source_blob_sha": "8cc2777e54659ed7f27a298725b9a6f3dd573e34",
+  "source_commit": "2cea2e4607668623aae53c201909543b1b5fe762",
+  "notes": "PROC IML bias-variance decomposition: BiasVariance module computes squared bias, total variance, and MSE for three simulated estimator sets (OLS, LASSO, ElasticNet) drawn around fixed true coefficients with a fixed randseed(1234). Self-contained, no external data; ships byte-identical with a two-line autoexec (obs cap). Deterministic across repeat runs."
+}
